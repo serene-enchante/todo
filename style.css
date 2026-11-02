@@ -63,3 +63,6 @@
   .lesson-header{height:58px;padding:0 16px}
 }
 @media(max-width:600px){.step-counter{left:12px}}
+.step-exit h2{font-size:clamp(21px,2.7vw,29px);font-weight:500;line-height:1.25;letter-spacing:-.025em;color:#f6f6f6;margin:0 0 24px}
+.step-exit p{margin:0 0 1em}
+.step-exit p:last-child{margin-bottom:0}
