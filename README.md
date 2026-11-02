@@ -1,6 +1,10 @@
 # Steps
 
-Open `index.html` in a modern browser. Lessons and progress are kept in that browser's local storage; nothing is uploaded to a server.
+Open `index.html` in a modern browser. Lessons and progress are kept in that browser's local storage. Use **Sync Drive** on the hosted HTTPS app to merge them with the app's private Google Drive app data folder.
+
+## Google Drive sync
+
+The app requests the `drive.appdata` permission and stores one JSON backup in the hidden app data folder associated with the Google Cloud project. Sync is started by pressing **Sync Drive**; the access token is held in memory and is not saved by the app. Lessons are merged by ID and completed step indices are combined. Add the GitHub Pages origin to the OAuth web client's authorized JavaScript origins and add the Google account as a test user while the OAuth app is in Testing mode.
 
 ## Install as an app
 

@@ -1,11 +1,15 @@
 (() => {
   const LESSONS_KEY = 'steps.lessons.v1';
   const SCHEMA_KEY = 'steps.schema.v1';
+  const GOOGLE_CLIENT_ID = '832955829932-qrodf84fkr56i9m2jk21lq3ip7vj055s.apps.googleusercontent.com';
+  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+  const DRIVE_FILE_NAME = 'steps-data-v1.json';
   const DEFAULT_SCHEMA = { title: 'title', steps: 'steps', stepTitle: 'title', stepContent: 'content' };
   const $ = (id) => document.getElementById(id);
   const library = $('library'), lessonView = $('lessonView');
   let lessons = read(LESSONS_KEY, []), schema = read(SCHEMA_KEY, DEFAULT_SCHEMA);
   let activeId = null, activeStep = 0, toastTimer;
+  let googleIdentityPromise;
 
   function read(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch { return fallback; } }
   function saveLessons() { localStorage.setItem(LESSONS_KEY, JSON.stringify(lessons)); }
@@ -98,6 +102,123 @@
     else { renderStep(); notify('Lesson complete'); }
   }
   function notify(message) { const el = $('toast'); el.textContent = message; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600); }
+  function loadGoogleIdentityServices() {
+    if (window.google?.accounts?.oauth2) return Promise.resolve();
+    if (googleIdentityPromise) return googleIdentityPromise;
+    googleIdentityPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.onload = () => window.google?.accounts?.oauth2 ? resolve() : reject(new Error('Google sign-in did not load'));
+      script.onerror = () => reject(new Error('Could not load Google sign-in. Check your connection and try again.'));
+      document.head.append(script);
+    }).catch(error => { googleIdentityPromise = null; throw error; });
+    return googleIdentityPromise;
+  }
+  async function getDriveAccessToken() {
+    await loadGoogleIdentityServices();
+    return new Promise((resolve, reject) => {
+      const tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: DRIVE_SCOPE,
+        callback: response => {
+          if (response.error) reject(new Error(response.error_description || response.error));
+          else if (response.access_token) resolve(response.access_token);
+          else reject(new Error('Google did not return an access token'));
+        },
+        error_callback: error => reject(new Error(error.message || 'Google authorization was interrupted'))
+      });
+      tokenClient.requestAccessToken();
+    });
+  }
+  async function driveRequest(url, token, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: { Authorization: `Bearer ${token}`, ...(options.headers || {}) }
+    });
+    if (!response.ok) {
+      let detail = '';
+      try { detail = (await response.json()).error?.message || ''; } catch {}
+      throw new Error(detail || `Google Drive returned ${response.status}`);
+    }
+    if (response.status === 204) return null;
+    return response.json();
+  }
+  async function findDriveDataFile(token) {
+    const query = new URLSearchParams({
+      q: `name = '${DRIVE_FILE_NAME}' and trashed = false`,
+      spaces: 'appDataFolder',
+      fields: 'files(id,name,modifiedTime)',
+      pageSize: '100'
+    });
+    const result = await driveRequest(`https://www.googleapis.com/drive/v3/files?${query}`, token);
+    return (result.files || []).sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''))[0] || null;
+  }
+  async function saveDriveData(token, file, data) {
+    const content = JSON.stringify(data);
+    if (file) {
+      await driveRequest(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(file.id)}?uploadType=media`, token, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content
+      });
+      return;
+    }
+    const boundary = `steps_${crypto.randomUUID().replaceAll('-', '')}`;
+    const metadata = { name: DRIVE_FILE_NAME, mimeType: 'application/json', parents: ['appDataFolder'] };
+    const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
+    await driveRequest(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id`, token, {
+      method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body
+    });
+  }
+  function sameSchema(a, b) {
+    return Object.keys(b).every(key => a?.[key] === b[key]);
+  }
+  function mergeLessons(localLessons, remoteLessons) {
+    const merged = new Map();
+    for (const lesson of remoteLessons) if (lesson?.id && Array.isArray(lesson.steps)) merged.set(lesson.id, lesson);
+    for (const lesson of localLessons) {
+      if (!lesson?.id || !Array.isArray(lesson.steps)) continue;
+      const remote = merged.get(lesson.id);
+      if (!remote) { merged.set(lesson.id, lesson); continue; }
+      const newest = (lesson.updatedAt || 0) >= (remote.updatedAt || 0) ? lesson : remote;
+      const completed = [...new Set([...(remote.completed || []), ...(lesson.completed || [])])]
+        .filter(index => Number.isInteger(index) && index >= 0 && index < newest.steps.length).sort((a, b) => a - b);
+      merged.set(lesson.id, { ...newest, completed });
+    }
+    return [...merged.values()];
+  }
+  async function syncWithDrive() {
+    const button = $('driveSyncButton');
+    button.disabled = true;
+    button.querySelector('span').textContent = 'Syncing…';
+    try {
+      const token = await getDriveAccessToken();
+      const file = await findDriveDataFile(token);
+      let remote = { lessons: [], schema: DEFAULT_SCHEMA };
+      if (file) {
+        const result = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?alt=media`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!result.ok) throw new Error(`Could not read Drive data (${result.status})`);
+        remote = await result.json();
+        if (!remote || !Array.isArray(remote.lessons)) throw new Error('The saved Drive data is not a valid Steps backup');
+      }
+      const chosenSchema = sameSchema(schema, DEFAULT_SCHEMA) ? { ...DEFAULT_SCHEMA, ...(remote.schema || {}) } : { ...(remote.schema || DEFAULT_SCHEMA), ...schema };
+      const mergedLessons = mergeLessons(lessons, remote.lessons || []);
+      const payload = { schemaVersion: 1, updatedAt: Date.now(), schema: chosenSchema, lessons: mergedLessons };
+      await saveDriveData(token, file, payload);
+      lessons = mergedLessons; schema = chosenSchema;
+      saveLessons(); localStorage.setItem(SCHEMA_KEY, JSON.stringify(schema));
+      renderList();
+      if (activeId) openLesson(activeId);
+      notify('Drive sync complete');
+    } catch (error) {
+      notify(error.message || 'Drive sync failed');
+    } finally {
+      button.disabled = false;
+      button.querySelector('span').textContent = 'Sync Drive';
+    }
+  }
+  $('driveSyncButton').addEventListener('click', syncWithDrive);
   $('uploadButton').addEventListener('click', () => $('lessonFile').click());
   $('lessonFile').addEventListener('change', async (e) => {
     const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;

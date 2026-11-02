@@ -42,6 +42,12 @@
 .back-button svg{width:20px;height:20px}
 .back-button span{display:none}
 .lesson-layout{width:100%;max-width:1000px}
+.library-top{flex-wrap:wrap}
+.drive-button{flex-basis:100%;display:inline-flex;align-items:center;gap:9px;border:0;background:transparent;color:#aaa;padding:9px 0;cursor:pointer;text-align:left}
+.drive-button:hover:not(:disabled){color:#fff}
+.drive-button:disabled{opacity:.55;cursor:wait}
+.drive-button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.drive-button:focus-visible{outline:none;box-shadow:none;color:#fff}
 [hidden]{display:none!important}
 @media(max-width:700px){
   .app{display:block}
