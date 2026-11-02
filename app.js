@@ -102,6 +102,45 @@
     else { renderStep(); notify('Lesson complete'); }
   }
   function notify(message) { const el = $('toast'); el.textContent = message; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600); }
+  async function copyStepJson() {
+    const lesson = lessons.find(item => item.id === activeId);
+    if (!lesson) return;
+    const current = lesson.steps[activeStep];
+    const exportData = {
+      lesson: {
+        title: lesson.title,
+        steps: lesson.steps.map(({ title, content }) => ({ title, content }))
+      },
+      currentStep: {
+        number: activeStep + 1,
+        total: lesson.steps.length,
+        title: current.title,
+        content: current.content
+      },
+      completedSteps: (lesson.completed || []).map(index => index + 1).sort((a, b) => a - b)
+    };
+    const json = JSON.stringify(exportData, null, 2);
+    try {
+      if (navigator.clipboard?.writeText) {
+        try { await navigator.clipboard.writeText(json); }
+        catch { copyWithFallback(json); }
+      } else {
+        copyWithFallback(json);
+      }
+      notify('Lesson and current step copied as JSON');
+    } catch {
+      notify('Could not copy JSON');
+    }
+  }
+  function copyWithFallback(text) {
+    const field = document.createElement('textarea');
+    field.value = text; field.setAttribute('readonly', '');
+    field.style.position = 'fixed'; field.style.opacity = '0';
+    document.body.append(field); field.select();
+    const copied = document.execCommand('copy'); field.remove();
+    if (!copied) throw new Error('Clipboard unavailable');
+  }
+  $('copyStepButton').addEventListener('click', copyStepJson);
   function loadGoogleIdentityServices() {
     if (window.google?.accounts?.oauth2) return Promise.resolve();
     if (googleIdentityPromise) return googleIdentityPromise;

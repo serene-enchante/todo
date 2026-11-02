@@ -41,6 +41,10 @@
 .back-button{width:36px;height:36px;display:grid;place-items:center;color:#aaa}
 .back-button svg{width:20px;height:20px}
 .back-button span{display:none}
+.copy-step-button{width:36px;height:36px;display:grid;place-items:center;justify-self:end;border:0;border-radius:50%;background:transparent;color:#aaa;cursor:pointer}
+.copy-step-button:hover{color:#fff;background:#171717}
+.copy-step-button svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.copy-step-button:focus-visible{outline:2px solid #888;outline-offset:2px}
 .lesson-layout{width:100%;max-width:1000px}
 .library-top{flex-wrap:wrap}
 .drive-button{flex-basis:100%;display:inline-flex;align-items:center;gap:9px;border:0;background:transparent;color:#aaa;padding:9px 0;cursor:pointer;text-align:left}

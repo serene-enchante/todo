@@ -6,6 +6,10 @@ Open `index.html` in a modern browser. Lessons and progress are kept in that bro
 
 The app requests the `drive.appdata` permission and stores one JSON backup in the hidden app data folder associated with the Google Cloud project. Sync is started by pressing **Sync Drive**; the access token is held in memory and is not saved by the app. Lessons are merged by ID and completed step indices are combined. Add the GitHub Pages origin to the OAuth web client's authorized JavaScript origins and add the Google account as a test user while the OAuth app is in Testing mode.
 
+## Copy a step to Gemini
+
+Open a lesson and press the copy icon in the upper-right corner. The clipboard JSON includes that lesson, the current step, and completed step numbers; paste it into Gemini when asking for help.
+
 ## Install as an app
 
 The web app manifest and service worker cache the interface for offline use. To install it, serve this folder from an HTTPS website (or `localhost` while developing); service workers cannot run from a `file://` URL. On iPhone or iPad, open the HTTPS site in Safari and use **Share → Add to Home Screen**. On a Mac, open the HTTPS site in Safari and use **File → Add to Dock** where available, or install it from a supported browser's install control. Keep using the same site address so the installed app sees the same locally stored lessons and progress.
