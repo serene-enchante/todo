@@ -1,0 +1,37 @@
+{
+  "title": "Pour-over coffee",
+  "steps": [
+    {
+      "title": "Gather your tools",
+      "content": "Set out a dripper, paper filter, mug or server, kettle, scale, and freshly roasted coffee."
+    },
+    {
+      "title": "Heat the water",
+      "content": "Bring about 350 g of water to a boil, then let it cool briefly to around 94°C (201°F)."
+    },
+    {
+      "title": "Rinse the filter",
+      "content": "Place the paper filter in the dripper and rinse it with hot water. Discard the rinse water and set the dripper on your mug or server."
+    },
+    {
+      "title": "Grind and measure",
+      "content": "Weigh 22 g of coffee and grind it to a medium-fine texture, similar to table salt. Add the grounds to the filter and gently level the bed."
+    },
+    {
+      "title": "Bloom the coffee",
+      "content": "Start a timer. Pour 45 g of water evenly over the grounds. Wait 30 seconds while the coffee releases gas."
+    },
+    {
+      "title": "Pour in stages",
+      "content": "Slowly pour in circles, adding water until the scale reads 200 g. At about 1:15, pour again to reach 350 g. Keep the stream gentle and avoid pouring directly onto the filter."
+    },
+    {
+      "title": "Let it drain",
+      "content": "Wait for the water to finish dripping. The full brew should take about 2:45 to 3:30. If it drains much faster or slower, adjust the grind next time."
+    },
+    {
+      "title": "Serve",
+      "content": "Remove the dripper, swirl the coffee gently, and serve. Take a moment to notice its aroma and how the flavor changes as it cools."
+    }
+  ]
+}

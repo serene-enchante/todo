@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Steps">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <title>Steps</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app" class="app">
+    <aside id="library" class="library sidebar" aria-label="Lessons">
+      <div class="library-top">
+        <button class="upload-button" id="uploadButton" type="button" aria-label="Upload lesson" title="Upload lesson">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/></svg>
+          <span>Upload lesson</span>
+        </button>
+        <input id="lessonFile" type="file" accept="application/json,.json" hidden>
+        <label class="schema-button" title="Load a reusable schema mapping">
+          <span>Schema</span><input id="schemaFile" type="file" accept="application/json,.json" hidden>
+        </label>
+      </div>
+      <div id="lessonList" class="lesson-list"></div>
+      <div id="emptyState" class="empty-state" hidden></div>
+    </aside>
+
+    <section id="lessonView" class="lesson-view" hidden>
+      <header class="lesson-header">
+        <button class="back-button" id="backButton" type="button" aria-label="Back to lessons" title="Back to lessons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H4m0 0 7-7m-7 7 7 7"/></svg></button>
+        <h1 id="lessonTitle"></h1>
+        <div class="header-spacer" aria-hidden="true"></div>
+      </header>
+      <div class="lesson-layout">
+        <aside class="step-map" aria-label="Step progress"><div id="stepDots" class="step-dots"></div></aside>
+        <div class="step-stage" id="stepStage" tabindex="0" aria-live="polite">
+          <article id="stepCard" class="step-card"></article>
+          <span id="stepCounter" class="step-counter"></span>
+        </div>
+      </div>
+    </section>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+  <script src="app.js"></script>
+  <script src="pwa.js"></script>
+</body>
+</html>
