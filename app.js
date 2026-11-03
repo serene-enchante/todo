@@ -105,6 +105,7 @@
   async function copyStepJson() {
     const lesson = lessons.find(item => item.id === activeId);
     if (!lesson) return;
+    window.open('https://gemini.google.com/app', '_blank', 'noopener,noreferrer');
     const current = lesson.steps[activeStep];
     const exportData = {
       lesson: {
@@ -127,7 +128,7 @@
       } else {
         copyWithFallback(json);
       }
-      notify('Lesson and current step copied as JSON');
+      notify('Copied for Gemini. Paste it into the new tab.');
     } catch {
       notify('Could not copy JSON');
     }
