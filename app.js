@@ -37,8 +37,12 @@
       steps: rawSteps.map((step, i) => {
         const heading = firstValue(step, [map.stepTitle, 'title', 'heading', 'name']);
         const body = firstValue(step, [map.stepContent, 'content', 'text', 'body', 'description']);
+        const rawCitations = firstValue(step, [map.stepCitations, 'citations', 'citation']);
         const value = body ?? (typeof step === 'string' ? step : JSON.stringify(step, null, 2));
-        return { title: heading == null ? '' : String(heading), content: typeof value === 'string' ? value : JSON.stringify(value, null, 2), index: i };
+        const citations = rawCitations == null ? [] : (Array.isArray(rawCitations) ? rawCitations : [rawCitations])
+          .filter(citation => citation != null)
+          .map(citation => typeof citation === 'string' ? { source: citation } : (typeof citation === 'object' && !Array.isArray(citation) ? { ...citation } : { source: String(citation) }));
+        return { title: heading == null ? '' : String(heading), content: typeof value === 'string' ? value : JSON.stringify(value, null, 2), citations, index: i };
       }), progress: 0, updatedAt: Date.now()
     };
   }
@@ -107,6 +111,26 @@
     if (step.title) { const h = document.createElement('h2'); h.textContent = step.title; card.append(h); }
     // Keep imported content inert; rendering as text prevents uploaded JSON from injecting markup.
     const p = document.createElement('p'); p.textContent = step.content; card.append(p);
+    if (step.citations?.length) {
+      const citationList = document.createElement('div'); citationList.className = 'step-citations';
+      for (const citation of step.citations) {
+        const source = citation.source || citation.book || citation.title || 'Source';
+        const printedPage = citation.page ?? citation.printedPage;
+        const pdfPage = citation.pdfPage;
+        const lineRange = citation.lines ?? citation.lineRange ?? (citation.lineStart != null || citation.lineEnd != null
+          ? `${citation.lineStart ?? '?'}–${citation.lineEnd ?? '?'}` : null);
+        const details = [String(source)];
+        if (printedPage != null) details.push(`p. ${printedPage}`);
+        if (pdfPage != null && String(pdfPage) !== String(printedPage)) details.push(`PDF p. ${pdfPage}`);
+        if (lineRange != null && lineRange !== '') details.push(`lines ${lineRange}`);
+        if (citation.section) details.push(String(citation.section));
+        const entry = document.createElement('div'); entry.className = 'step-citation';
+        const label = document.createElement('p'); label.className = 'step-citation-label'; label.textContent = details.join(' · '); entry.append(label);
+        if (citation.quote) { const quote = document.createElement('p'); quote.className = 'step-citation-quote'; quote.textContent = `“${citation.quote}”`; entry.append(quote); }
+        citationList.append(entry);
+      }
+      card.append(citationList);
+    }
     $('stepCounter').textContent = `${activeStep + 1} / ${lesson.steps.length}`;
     const dots = $('stepDots'); dots.replaceChildren();
     lesson.steps.forEach((_, i) => {
@@ -141,13 +165,14 @@
     const exportData = {
       lesson: {
         title: lesson.title,
-        steps: lesson.steps.map(({ title, content }) => ({ title, content }))
+        steps: lesson.steps.map(({ title, content, citations }) => ({ title, content, ...(citations?.length ? { citations } : {}) }))
       },
       currentStep: {
         number: activeStep + 1,
         total: lesson.steps.length,
         title: current.title,
-        content: current.content
+        content: current.content,
+        ...(current.citations?.length ? { citations: current.citations } : {})
       },
       completedSteps: (lesson.completed || []).map(index => index + 1).sort((a, b) => a - b)
     };
@@ -432,7 +457,7 @@
     try {
       const parsed = JSON.parse(await file.text());
       const candidate = parsed.schema || parsed;
-      for (const key of ['title', 'steps', 'stepTitle', 'stepContent']) if (candidate[key] !== undefined && typeof candidate[key] !== 'string') throw new Error(`Schema field “${key}” must be a dotted path string.`);
+      for (const key of ['title', 'steps', 'stepTitle', 'stepContent', 'stepCitations']) if (candidate[key] !== undefined && typeof candidate[key] !== 'string') throw new Error(`Schema field “${key}” must be a dotted path string.`);
       schema = { ...DEFAULT_SCHEMA, ...candidate }; localStorage.setItem(SCHEMA_KEY, JSON.stringify(schema)); notify('Schema saved on this device');
     } catch (err) { notify(err instanceof SyntaxError ? 'Could not read that schema' : (err.message || 'Invalid schema')); }
   });

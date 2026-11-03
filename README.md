@@ -24,11 +24,26 @@ The default shape is:
 {
   "title": "A lesson",
   "steps": [
-    { "title": "First step", "content": "The step text." },
+    {
+      "title": "First step",
+      "content": "The step text.",
+      "citations": [
+        {
+          "source": "AVID Tutorial Book",
+          "printedPage": 42,
+          "pdfPage": 47,
+          "lines": "3-8",
+          "section": "Tutorial preparation",
+          "quote": "A short exact excerpt supporting this step."
+        }
+      ]
+    },
     { "content": "A step can omit its title." }
   ]
 }
 ```
+
+Each step can include a `citations` array. The lesson view displays the source, page, line range, section, and excerpt; copying a step to Gemini includes the citations. Use printed page numbers in `printedPage`; add `pdfPage` when the PDF viewer's page index differs. Never invent line numbers. If the book has no stable line numbering, use `"lines": null` and include a short exact quote plus its section.
 
 Use **Schema** to load a reusable mapping when your JSON uses different field names. The mapping uses dotted paths:
 
@@ -41,4 +56,4 @@ Use **Schema** to load a reusable mapping when your JSON uses different field na
 }
 ```
 
-`title` and `steps` point into the lesson object. `stepTitle` and `stepContent` point into each step object. Steps may also be strings. A lesson can override the saved mapping by including the same object as `_schema` at its root. Imported text is displayed as text, not interpreted as HTML.
+`title` and `steps` point into the lesson object. `stepTitle`, `stepContent`, and optional `stepCitations` point into each step object. Steps may also be strings. A lesson can override the saved mapping by including the same object as `_schema` at its root. Imported text is displayed as text, not interpreted as HTML.
