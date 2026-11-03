@@ -64,6 +64,9 @@
 .step-citation+.step-citation{margin-top:12px}
 .step-citation-label,.step-citation-quote{margin:0}
 .step-citation-label{color:#aaa;font-size:12px;font-weight:500}
+.step-citation-label[href]{display:inline-block;color:#c7c7c7;text-decoration:none;cursor:pointer}
+.step-citation-label[href]:hover{text-decoration:underline;color:#fff}
+.step-citation-label[aria-disabled=true]{color:#777}
 .step-citation-quote{margin-top:3px;color:#777;font-size:12px}
 .lesson-paste-dialog{width:min(620px,calc(100vw - 28px));max-width:none;max-height:calc(100dvh - 32px);padding:20px;border:1px solid #303030;border-radius:14px;background:#111;color:#eee;box-shadow:0 24px 80px #0009}
 .lesson-paste-dialog::backdrop{background:#000b;backdrop-filter:blur(3px)}

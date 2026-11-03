@@ -43,7 +43,7 @@ The default shape is:
 }
 ```
 
-Each step can include a `citations` array. The lesson view displays the source, page, line range, section, and excerpt; copying a step to Gemini includes the citations. Use printed page numbers in `printedPage`; add `pdfPage` when the PDF viewer's page index differs. Never invent line numbers. If the book has no stable line numbering, use `"lines": null` and include a short exact quote plus its section.
+Each step can include a `citations` array. The lesson view displays the source, page, line range, section, and excerpt; copying a step to Gemini includes the citations. When the lesson belongs to an uploaded book, clicking its citation opens that book PDF at `pdfPage` (or `printedPage` if no PDF page is given). A citation can instead include an `https://` `url` to open a direct web source. Use printed page numbers in `printedPage`; add `pdfPage` when the PDF viewer's page index differs. Never invent line numbers. If the book has no stable line numbering, use `"lines": null` and include a short exact quote plus its section.
 
 Use **Schema** to load a reusable mapping when your JSON uses different field names. The mapping uses dotted paths:
 

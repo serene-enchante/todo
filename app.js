@@ -135,7 +135,20 @@
         if (lineRange != null && lineRange !== '') details.push(`lines ${lineRange}`);
         if (citation.section) details.push(String(citation.section));
         const entry = document.createElement('div'); entry.className = 'step-citation';
-        const label = document.createElement('p'); label.className = 'step-citation-label'; label.textContent = details.join(' · '); entry.append(label);
+        const label = document.createElement('a'); label.className = 'step-citation-label'; label.textContent = details.join(' · ');
+        const sourceBook = books.find(book => book.id === lesson.bookId && book.fileId);
+        if (typeof citation.url === 'string' && /^https?:\/\//i.test(citation.url)) {
+          label.href = citation.url; label.target = '_blank'; label.rel = 'noopener noreferrer';
+        } else if (sourceBook) {
+          label.href = '#';
+          label.addEventListener('click', event => {
+            event.preventDefault();
+            openBookCitation(sourceBook, pdfPage ?? printedPage);
+          });
+        } else {
+          label.removeAttribute('href'); label.setAttribute('aria-disabled', 'true');
+        }
+        entry.append(label);
         if (citation.quote) { const quote = document.createElement('p'); quote.className = 'step-citation-quote'; quote.textContent = `“${citation.quote}”`; entry.append(quote); }
         citationList.append(entry);
       }
@@ -151,6 +164,25 @@
       dot.addEventListener('click', () => goTo(i)); dots.append(dot);
     });
     const currentDot = dots.children[activeStep]; currentDot?.scrollIntoView({ block: 'nearest' });
+  }
+  async function openBookCitation(book, page) {
+    const tab = window.open('about:blank', '_blank');
+    if (!tab) { notify('Allow pop-ups to open the book citation'); return; }
+    try {
+      const token = await getDriveAccessToken();
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(book.fileId)}?alt=media`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error(`Could not open book (${response.status})`);
+      const pdf = await response.blob();
+      const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }));
+      const pageNumber = Number(page);
+      tab.location.replace(`${url}${Number.isFinite(pageNumber) && pageNumber > 0 ? `#page=${Math.floor(pageNumber)}` : ''}`);
+      notify(`Opened ${book.title}${Number.isFinite(pageNumber) && pageNumber > 0 ? ` · p. ${Math.floor(pageNumber)}` : ''}`);
+    } catch (error) {
+      tab.close();
+      notify(error.message || 'Could not open book citation');
+    }
   }
   function goTo(index) {
     const lesson = lessons.find(x => x.id === activeId); if (!lesson || index < 0 || index >= lesson.steps.length || index === activeStep) return;
