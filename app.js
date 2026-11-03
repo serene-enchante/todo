@@ -412,7 +412,7 @@
       button.querySelector('span').textContent = 'Sync Drive';
     }
   }
-  $('driveSyncButton').addEventListener('click', syncWithDrive);
+  $('driveSyncButton').addEventListener('click', () => syncWithDrive());
   $('bookSelect').addEventListener('change', event => {
     const selected = event.target.value;
     if (selected === ADD_BOOK_OPTION) {
