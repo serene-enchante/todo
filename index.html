@@ -17,6 +17,7 @@
   <main id="app" class="app">
     <aside id="library" class="library sidebar" aria-label="Lessons">
       <div class="library-top">
+        <select class="book-picker" id="bookSelect" aria-label="Book"></select>
         <button class="upload-button" id="uploadButton" type="button" aria-label="Upload lesson" title="Upload lesson">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/></svg>
           <span>Upload lesson</span>
@@ -28,10 +29,6 @@
         <button class="drive-button" id="driveSyncButton" type="button" title="Sync lessons and progress with Google Drive">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 18.5h11a4 4 0 0 0 .3-8 6 6 0 0 0-11.6-1.4A4.5 4.5 0 0 0 6.5 18.5Z"/><path d="M12 11v7m0 0-2.5-2.5M12 18l2.5-2.5"/></svg>
           <span>Sync Drive</span>
-        </button>
-        <button class="book-upload-button" id="bookUploadButton" type="button" title="Upload a PDF book to private app data in Google Drive">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/></svg>
-          <span>Upload book</span>
         </button>
         <input id="bookFile" type="file" accept="application/pdf,.pdf" hidden>
       </div>

@@ -1,14 +1,21 @@
 (() => {
   const LESSONS_KEY = 'steps.lessons.v1';
   const SCHEMA_KEY = 'steps.schema.v1';
+  const BOOKS_KEY = 'steps.books.v1';
+  const ACTIVE_BOOK_KEY = 'steps.activeBook.v1';
   const GOOGLE_CLIENT_ID = '832955829932-qrodf84fkr56i9m2jk21lq3ip7vj055s.apps.googleusercontent.com';
   const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
   const DRIVE_FILE_NAME = 'steps-data-v1.json';
-  const DRIVE_BOOK_FILE_NAME = 'steps-reference-book.pdf';
+  const DRIVE_BOOK_FILE_PREFIX = 'steps-book-';
+  const LEGACY_BOOK_FILE_NAME = 'steps-reference-book.pdf';
+  const ADD_BOOK_OPTION = '__add_book__';
+  const UNASSIGNED_OPTION = '__unassigned__';
   const DEFAULT_SCHEMA = { title: 'title', steps: 'steps', stepTitle: 'title', stepContent: 'content' };
   const $ = (id) => document.getElementById(id);
   const library = $('library'), lessonView = $('lessonView');
   let lessons = read(LESSONS_KEY, []), schema = read(SCHEMA_KEY, DEFAULT_SCHEMA);
+  const savedBookId = localStorage.getItem(ACTIVE_BOOK_KEY);
+  let books = read(BOOKS_KEY, []), activeBookId = savedBookId === '__unassigned__' ? null : (savedBookId || '__first_book__');
   let activeId = null, activeStep = 0, toastTimer;
   let googleIdentityPromise;
 
@@ -26,7 +33,7 @@
     const rawSteps = firstValue(input, [map.steps, 'steps', 'lesson.steps', 'items']);
     if (!Array.isArray(rawSteps) || rawSteps.length === 0) throw new Error('This file needs a non-empty steps array.');
     return {
-      id: crypto.randomUUID(), title: String(title),
+      id: crypto.randomUUID(), title: String(title), bookId: activeBookId,
       steps: rawSteps.map((step, i) => {
         const heading = firstValue(step, [map.stepTitle, 'title', 'heading', 'name']);
         const body = firstValue(step, [map.stepContent, 'content', 'text', 'body', 'description']);
@@ -35,10 +42,32 @@
       }), progress: 0, updatedAt: Date.now()
     };
   }
+  function renderBookSelect() {
+    const select = $('bookSelect');
+    const hasUnassigned = lessons.some(lesson => !lesson.bookId);
+    if (activeBookId === '__first_book__') activeBookId = books[0]?.id || null;
+    if (activeBookId && !books.some(book => book.id === activeBookId)) activeBookId = books[0]?.id || null;
+    if (!activeBookId && books.length && !hasUnassigned) activeBookId = books[0].id;
+    select.replaceChildren();
+    if (!books.length && !hasUnassigned) {
+      const empty = document.createElement('option'); empty.value = ''; empty.textContent = 'No books'; empty.disabled = true; select.append(empty);
+    }
+    for (const book of books) {
+      const option = document.createElement('option'); option.value = book.id; option.textContent = book.title; select.append(option);
+    }
+    if (hasUnassigned) {
+      const option = document.createElement('option'); option.value = UNASSIGNED_OPTION; option.textContent = 'Unassigned'; select.append(option);
+    }
+    const addBook = document.createElement('option'); addBook.value = ADD_BOOK_OPTION; addBook.textContent = '+ Add new book…'; select.append(addBook);
+    select.value = activeBookId || (hasUnassigned ? UNASSIGNED_OPTION : '');
+    if (select.value !== ADD_BOOK_OPTION) select.dataset.previousValue = select.value;
+    localStorage.setItem(ACTIVE_BOOK_KEY, activeBookId || '__unassigned__');
+  }
   function renderList() {
+    renderBookSelect();
     const list = $('lessonList'); list.replaceChildren();
     lessons.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    for (const lesson of lessons) {
+    for (const lesson of lessons.filter(item => (item.bookId || null) === activeBookId)) {
       const row = document.createElement('button'); row.type = 'button'; row.className = 'lesson-row';
       if (lesson.id === activeId) row.classList.add('selected');
       const head = document.createElement('span'); head.className = 'lesson-row-head';
@@ -54,6 +83,7 @@
   }
   function openLesson(id) {
     activeId = id; const lesson = lessons.find(x => x.id === id); if (!lesson) return;
+    activeBookId = lesson.bookId || null;
     lesson.completed ||= [];
     activeStep = Math.min(lesson.lastStep || 0, lesson.steps.length - 1);
     lessonView.hidden = false; $('app').classList.add('lesson-open'); renderList();
@@ -210,19 +240,24 @@
       method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body
     });
   }
-  async function findDriveBookFile(token) {
+  async function findLegacyDriveBookFile(token) {
     const query = new URLSearchParams({
-      q: `name = '${DRIVE_BOOK_FILE_NAME}' and trashed = false`,
+      q: `name = '${LEGACY_BOOK_FILE_NAME}' and trashed = false`,
       spaces: 'appDataFolder',
-      fields: 'files(id,name,modifiedTime)',
-      pageSize: '10'
+      fields: 'files(id,name,description,modifiedTime)',
+      pageSize: '1'
     });
     const result = await driveRequest(`https://www.googleapis.com/drive/v3/files?${query}`, token);
-    return (result.files || []).sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''))[0] || null;
+    return result.files?.[0] || null;
   }
-  async function uploadBookToDrive(token, file) {
-    const existing = await findDriveBookFile(token);
-    const metadata = { name: DRIVE_BOOK_FILE_NAME, mimeType: 'application/pdf', description: `Uploaded source: ${file.name}` };
+  async function uploadBookToDrive(token, file, bookId) {
+    const driveName = `${DRIVE_BOOK_FILE_PREFIX}${bookId}.pdf`;
+    const query = new URLSearchParams({
+      q: `name = '${driveName}' and trashed = false`, spaces: 'appDataFolder', fields: 'files(id)', pageSize: '1'
+    });
+    const matches = await driveRequest(`https://www.googleapis.com/drive/v3/files?${query}`, token);
+    const existing = matches.files?.[0] || null;
+    const metadata = { name: driveName, mimeType: 'application/pdf', description: `Uploaded source: ${file.name}` };
     if (!existing) metadata.parents = ['appDataFolder'];
     const uploadUrl = existing
       ? `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(existing.id)}?uploadType=resumable`
@@ -253,6 +288,14 @@
       try { detail = (await result.json()).error?.message || ''; } catch {}
       throw new Error(detail || `Book upload failed (${result.status})`);
     }
+    const uploaded = await result.json();
+    return {
+      id: bookId,
+      title: file.name.replace(/\.pdf$/i, ''),
+      fileId: uploaded.id,
+      driveName,
+      updatedAt: Date.now()
+    };
   }
   function sameSchema(a, b) {
     return Object.keys(b).every(key => a?.[key] === b[key]);
@@ -267,18 +310,28 @@
       const newest = (lesson.updatedAt || 0) >= (remote.updatedAt || 0) ? lesson : remote;
       const completed = [...new Set([...(remote.completed || []), ...(lesson.completed || [])])]
         .filter(index => Number.isInteger(index) && index >= 0 && index < newest.steps.length).sort((a, b) => a - b);
-      merged.set(lesson.id, { ...newest, completed });
+      merged.set(lesson.id, { ...newest, bookId: newest.bookId || remote.bookId || lesson.bookId || null, completed });
     }
     return [...merged.values()];
   }
-  async function syncWithDrive() {
+  function mergeBooks(localBooks, remoteBooks) {
+    const merged = new Map();
+    for (const book of remoteBooks) if (book?.id) merged.set(book.id, book);
+    for (const book of localBooks) {
+      if (!book?.id) continue;
+      const remote = merged.get(book.id);
+      if (!remote || (book.updatedAt || 0) >= (remote.updatedAt || 0)) merged.set(book.id, book);
+    }
+    return [...merged.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  }
+  async function syncWithDrive(accessToken = null, announce = true) {
     const button = $('driveSyncButton');
     button.disabled = true;
     button.querySelector('span').textContent = 'Syncing…';
     try {
-      const token = await getDriveAccessToken();
+      const token = accessToken || await getDriveAccessToken();
       const file = await findDriveDataFile(token);
-      let remote = { lessons: [], schema: DEFAULT_SCHEMA };
+      let remote = { lessons: [], books: [], schema: DEFAULT_SCHEMA };
       if (file) {
         const result = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?alt=media`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -287,40 +340,83 @@
         remote = await result.json();
         if (!remote || !Array.isArray(remote.lessons)) throw new Error('The saved Drive data is not a valid Steps backup');
       }
+      const remoteBooks = Array.isArray(remote.books) ? [...remote.books] : [];
+      const legacyFile = await findLegacyDriveBookFile(token);
+      let migratedLegacyBookId = null;
+      if (legacyFile && ![...books, ...remoteBooks].some(book => book.fileId === legacyFile.id)) {
+        const sourceName = legacyFile.description?.replace(/^Uploaded source:\s*/, '') || 'Reference book.pdf';
+        migratedLegacyBookId = `legacy-${legacyFile.id}`;
+        remoteBooks.push({
+          id: migratedLegacyBookId,
+          title: sourceName.replace(/\.pdf$/i, ''),
+          fileId: legacyFile.id,
+          driveName: legacyFile.name,
+          updatedAt: Date.parse(legacyFile.modifiedTime) || Date.now()
+        });
+      }
       const chosenSchema = sameSchema(schema, DEFAULT_SCHEMA) ? { ...DEFAULT_SCHEMA, ...(remote.schema || {}) } : { ...(remote.schema || DEFAULT_SCHEMA), ...schema };
       const mergedLessons = mergeLessons(lessons, remote.lessons || []);
-      const payload = { schemaVersion: 1, updatedAt: Date.now(), schema: chosenSchema, lessons: mergedLessons };
+      if (migratedLegacyBookId && !books.length && !remoteBooks.some(book => book.id !== migratedLegacyBookId)) {
+        for (const lesson of mergedLessons) if (!lesson.bookId) lesson.bookId = migratedLegacyBookId;
+      }
+      const mergedBooks = mergeBooks(books, remoteBooks);
+      const payload = { schemaVersion: 1, updatedAt: Date.now(), schema: chosenSchema, lessons: mergedLessons, books: mergedBooks };
       await saveDriveData(token, file, payload);
-      lessons = mergedLessons; schema = chosenSchema;
-      saveLessons(); localStorage.setItem(SCHEMA_KEY, JSON.stringify(schema));
+      lessons = mergedLessons; books = mergedBooks; schema = chosenSchema;
+      saveLessons(); localStorage.setItem(BOOKS_KEY, JSON.stringify(books)); localStorage.setItem(SCHEMA_KEY, JSON.stringify(schema));
+      if (activeBookId && !books.some(book => book.id === activeBookId)) activeBookId = null;
       renderList();
       if (activeId) openLesson(activeId);
-      notify('Drive sync complete');
+      if (announce) notify('Drive sync complete');
+      return true;
     } catch (error) {
-      notify(error.message || 'Drive sync failed');
+      if (announce) notify(error.message || 'Drive sync failed');
+      return false;
     } finally {
       button.disabled = false;
       button.querySelector('span').textContent = 'Sync Drive';
     }
   }
   $('driveSyncButton').addEventListener('click', syncWithDrive);
-  $('bookUploadButton').addEventListener('click', () => $('bookFile').click());
+  $('bookSelect').addEventListener('change', event => {
+    const selected = event.target.value;
+    if (selected === ADD_BOOK_OPTION) {
+      event.target.value = event.target.dataset.previousValue || '';
+      $('bookFile').click();
+      return;
+    }
+    activeBookId = selected === UNASSIGNED_OPTION || !selected ? null : selected;
+    localStorage.setItem(ACTIVE_BOOK_KEY, activeBookId || '__unassigned__');
+    activeId = null; lessonView.hidden = true; $('app').classList.remove('lesson-open');
+    renderList();
+  });
   $('bookFile').addEventListener('change', async (event) => {
     const file = event.target.files?.[0]; event.target.value = '';
     if (!file) return;
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       notify('Choose a PDF book'); return;
     }
-    const button = $('bookUploadButton');
-    button.disabled = true; button.querySelector('span').textContent = 'Uploading…';
+    const select = $('bookSelect'), addLessonButton = $('uploadButton');
+    select.disabled = true; addLessonButton.disabled = true;
+    const hasBooksAlready = books.length > 0;
     try {
       const token = await getDriveAccessToken();
-      await uploadBookToDrive(token, file);
-      notify('Book uploaded to private Drive storage');
+      const bookId = crypto.randomUUID();
+      const book = await uploadBookToDrive(token, file, bookId);
+      books.unshift(book); activeBookId = book.id;
+      if (!hasBooksAlready) {
+        for (const lesson of lessons) if (!lesson.bookId) lesson.bookId = book.id;
+        saveLessons();
+      }
+      localStorage.setItem(BOOKS_KEY, JSON.stringify(books));
+      localStorage.setItem(ACTIVE_BOOK_KEY, activeBookId);
+      activeId = null; lessonView.hidden = true; $('app').classList.remove('lesson-open'); renderList();
+      const synced = await syncWithDrive(token, false);
+      notify(synced ? 'Book added and synced' : 'Book uploaded. Sync Drive to share it across devices.');
     } catch (error) {
       notify(error.message || 'Book upload failed');
     } finally {
-      button.disabled = false; button.querySelector('span').textContent = 'Upload book';
+      select.disabled = false; addLessonButton.disabled = false;
     }
   });
   $('uploadButton').addEventListener('click', () => $('lessonFile').click());
