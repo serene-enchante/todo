@@ -57,3 +57,5 @@ Use **Schema** to load a reusable mapping when your JSON uses different field na
 ```
 
 `title` and `steps` point into the lesson object. `stepTitle`, `stepContent`, and optional `stepCitations` point into each step object. Steps may also be strings. A lesson can override the saved mapping by including the same object as `_schema` at its root. Imported text is displayed as text, not interpreted as HTML.
+
+Import lesson JSON from a file with **Upload lesson** or paste it with **Paste JSON**. The lesson is assigned to the currently selected book.

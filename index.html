@@ -23,6 +23,10 @@
           <span>Upload lesson</span>
         </button>
         <input id="lessonFile" type="file" accept="application/json,.json" hidden>
+        <button class="paste-button" id="pasteLessonButton" type="button" title="Paste lesson JSON">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6v3H9zM9 12h6M9 16h6"/></svg>
+          <span>Paste JSON</span>
+        </button>
         <label class="schema-button" title="Load a reusable schema mapping">
           <span>Schema</span><input id="schemaFile" type="file" accept="application/json,.json" hidden>
         </label>
@@ -54,6 +58,14 @@
         </div>
       </div>
     </section>
+    <dialog class="lesson-paste-dialog" id="lessonPasteDialog" aria-labelledby="pasteDialogTitle">
+      <h2 id="pasteDialogTitle">Paste lesson JSON</h2>
+      <textarea id="lessonJsonInput" spellcheck="false" aria-label="Lesson JSON" placeholder="Paste JSON here"></textarea>
+      <div class="paste-dialog-actions">
+        <button class="paste-cancel-button" id="cancelPasteButton" type="button">Cancel</button>
+        <button class="paste-import-button" id="importPasteButton" type="button">Import lesson</button>
+      </div>
+    </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </main>
   <script src="app.js"></script>

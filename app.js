@@ -46,6 +46,16 @@
       }), progress: 0, updatedAt: Date.now()
     };
   }
+  function importLessonJson(text) {
+    if (!text.trim()) throw new Error('Paste lesson JSON first');
+    const lesson = normalize(JSON.parse(text));
+    lessons.unshift(lesson); saveLessons(); renderList();
+    return lesson;
+  }
+  function notifyLessonImported(lesson) {
+    const book = books.find(item => item.id === lesson.bookId);
+    notify(book ? `Lesson added to ${book.title}` : 'Lesson added');
+  }
   function renderBookSelect() {
     const select = $('bookSelect');
     const hasUnassigned = lessons.some(lesson => !lesson.bookId);
@@ -445,11 +455,26 @@
     }
   });
   $('uploadButton').addEventListener('click', () => $('lessonFile').click());
+  $('pasteLessonButton').addEventListener('click', () => {
+    $('lessonPasteDialog').showModal();
+    $('lessonJsonInput').focus();
+  });
+  $('cancelPasteButton').addEventListener('click', () => $('lessonPasteDialog').close());
+  $('importPasteButton').addEventListener('click', () => {
+    try {
+      const lesson = importLessonJson($('lessonJsonInput').value);
+      $('lessonJsonInput').value = '';
+      $('lessonPasteDialog').close();
+      notifyLessonImported(lesson);
+    } catch (error) {
+      notify(error instanceof SyntaxError ? 'Could not read that JSON' : (error.message || 'Could not import lesson'));
+    }
+  });
   $('lessonFile').addEventListener('change', async (e) => {
     const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
     try {
-      const lesson = normalize(JSON.parse(await file.text()));
-      lessons.unshift(lesson); saveLessons(); renderList(); notify('Lesson saved on this device');
+      const lesson = importLessonJson(await file.text());
+      notifyLessonImported(lesson);
     } catch (err) { notify(err instanceof SyntaxError ? 'Could not read that JSON file' : (err.message || 'Could not import lesson')); }
   });
   $('schemaFile').addEventListener('change', async (e) => {
