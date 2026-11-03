@@ -1,4 +1,4 @@
-const CACHE_NAME = 'steps-shell-v4';
+const CACHE_NAME = 'steps-shell-v5';
 const APP_SHELL = [
   './',
   './index.html',

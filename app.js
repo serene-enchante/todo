@@ -4,6 +4,7 @@
   const GOOGLE_CLIENT_ID = '832955829932-qrodf84fkr56i9m2jk21lq3ip7vj055s.apps.googleusercontent.com';
   const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
   const DRIVE_FILE_NAME = 'steps-data-v1.json';
+  const DRIVE_BOOK_FILE_NAME = 'steps-reference-book.pdf';
   const DEFAULT_SCHEMA = { title: 'title', steps: 'steps', stepTitle: 'title', stepContent: 'content' };
   const $ = (id) => document.getElementById(id);
   const library = $('library'), lessonView = $('lessonView');
@@ -209,6 +210,50 @@
       method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body
     });
   }
+  async function findDriveBookFile(token) {
+    const query = new URLSearchParams({
+      q: `name = '${DRIVE_BOOK_FILE_NAME}' and trashed = false`,
+      spaces: 'appDataFolder',
+      fields: 'files(id,name,modifiedTime)',
+      pageSize: '10'
+    });
+    const result = await driveRequest(`https://www.googleapis.com/drive/v3/files?${query}`, token);
+    return (result.files || []).sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''))[0] || null;
+  }
+  async function uploadBookToDrive(token, file) {
+    const existing = await findDriveBookFile(token);
+    const metadata = { name: DRIVE_BOOK_FILE_NAME, mimeType: 'application/pdf', description: `Uploaded source: ${file.name}` };
+    if (!existing) metadata.parents = ['appDataFolder'];
+    const uploadUrl = existing
+      ? `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(existing.id)}?uploadType=resumable`
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable';
+    const start = await fetch(uploadUrl, {
+      method: existing ? 'PATCH' : 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json; charset=UTF-8',
+        'X-Upload-Content-Type': 'application/pdf',
+        'X-Upload-Content-Length': String(file.size)
+      },
+      body: JSON.stringify(metadata)
+    });
+    if (!start.ok) {
+      let detail = '';
+      try { detail = (await start.json()).error?.message || ''; } catch {}
+      throw new Error(detail || `Could not start book upload (${start.status})`);
+    }
+    const sessionUrl = start.headers.get('Location');
+    if (!sessionUrl) throw new Error('Google Drive did not return an upload session');
+    const result = await fetch(sessionUrl, {
+      method: 'PUT',
+      body: file
+    });
+    if (!result.ok) {
+      let detail = '';
+      try { detail = (await result.json()).error?.message || ''; } catch {}
+      throw new Error(detail || `Book upload failed (${result.status})`);
+    }
+  }
   function sameSchema(a, b) {
     return Object.keys(b).every(key => a?.[key] === b[key]);
   }
@@ -259,6 +304,25 @@
     }
   }
   $('driveSyncButton').addEventListener('click', syncWithDrive);
+  $('bookUploadButton').addEventListener('click', () => $('bookFile').click());
+  $('bookFile').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0]; event.target.value = '';
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      notify('Choose a PDF book'); return;
+    }
+    const button = $('bookUploadButton');
+    button.disabled = true; button.querySelector('span').textContent = 'Uploading…';
+    try {
+      const token = await getDriveAccessToken();
+      await uploadBookToDrive(token, file);
+      notify('Book uploaded to private Drive storage');
+    } catch (error) {
+      notify(error.message || 'Book upload failed');
+    } finally {
+      button.disabled = false; button.querySelector('span').textContent = 'Upload book';
+    }
+  });
   $('uploadButton').addEventListener('click', () => $('lessonFile').click());
   $('lessonFile').addEventListener('change', async (e) => {
     const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
