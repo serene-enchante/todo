@@ -1,4 +1,8 @@
-const CACHE_NAME = 'steps-shell-v9';
+const CACHE_NAME = 'steps-shell-v10';
+const PDFJS_ASSETS = [
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+];
 const APP_SHELL = [
   './',
   './index.html',
@@ -13,7 +17,11 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(APP_SHELL);
+    await Promise.allSettled(PDFJS_ASSETS.map(asset => cache.add(asset)));
+  })());
   self.skipWaiting();
 });
 
@@ -26,7 +34,8 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const request = event.request;
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  const isPdfAsset = PDFJS_ASSETS.includes(request.url);
+  if (request.method !== 'GET' || (new URL(request.url).origin !== self.location.origin && !isPdfAsset)) return;
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).catch(() => caches.match('./index.html')));
     return;
