@@ -77,6 +77,22 @@
 .paste-dialog-actions button{border:0;background:transparent;color:#aaa;padding:8px 2px;cursor:pointer}
 .paste-dialog-actions button:hover{color:#fff}
 .paste-dialog-actions .paste-import-button{color:#eee}
+.pdf-viewer-dialog{width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:#090909;color:#eee}
+.pdf-viewer-dialog::backdrop{background:#000}
+.pdf-viewer-header{height:64px;display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:14px;padding:0 18px;border-bottom:1px solid #222;background:#050505}
+.pdf-close-button,.pdf-page-controls button{width:34px;height:34px;border:0;border-radius:50%;background:transparent;color:#bbb;font-size:20px;cursor:pointer}
+.pdf-close-button:hover,.pdf-page-controls button:hover{background:#1b1b1b;color:#fff}
+.pdf-viewer-heading{min-width:0}
+.pdf-viewer-heading h2{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:500}
+.pdf-viewer-heading span{display:block;margin-top:2px;color:#888;font-size:11px}
+.pdf-page-controls{display:flex;align-items:center;gap:8px;color:#999;font-size:12px;font-variant-numeric:tabular-nums}
+.pdf-page-controls button{font-size:16px}
+.pdf-viewer-scroll{height:calc(100dvh - 64px);overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:22px 12px}
+.pdf-page-canvas{position:relative;width:max-content;max-width:100%;min-height:120px}
+.pdf-page-canvas canvas{display:block;max-width:100%;height:auto;box-shadow:0 4px 32px #000a}
+.pdf-text-highlight{position:absolute;z-index:1;background:#f5d64d66;outline:1px solid #f5d64d99;border-radius:2px;pointer-events:none;mix-blend-mode:multiply}
+.step-citation-label{padding:0;border:0;background:transparent;font-family:inherit;text-align:left}
+.step-citation-label[href="#"]{cursor:pointer}
 [hidden]{display:none!important}
 @media(max-width:700px){
   .app{display:block}
