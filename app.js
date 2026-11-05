@@ -8,6 +8,9 @@
   const DRIVE_FILE_NAME = 'steps-data-v1.json';
   const DRIVE_BOOK_FILE_PREFIX = 'steps-book-';
   const LEGACY_BOOK_FILE_NAME = 'steps-reference-book.pdf';
+  const PDFJS_SCRIPT = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const BOOK_CACHE = 'steps-books-v1';
   const ADD_BOOK_OPTION = '__add_book__';
   const UNASSIGNED_OPTION = '__unassigned__';
   const DEFAULT_SCHEMA = { title: 'title', steps: 'steps', stepTitle: 'title', stepContent: 'content' };
@@ -18,6 +21,8 @@
   let books = read(BOOKS_KEY, []), activeBookId = savedBookId === '__unassigned__' ? null : (savedBookId || '__first_book__');
   let activeId = null, activeStep = 0, toastTimer;
   let googleIdentityPromise;
+  let pdfLibraryPromise, pdfDocumentCache = new Map(), pdfTextCache = new Map();
+  let currentPdf = null, currentPdfPage = 1, currentPdfMatchPage = 0, currentPdfMatch = [];
 
   function read(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch { return fallback; } }
   function saveLessons() { localStorage.setItem(LESSONS_KEY, JSON.stringify(lessons)); }
@@ -143,7 +148,7 @@
           label.href = '#';
           label.addEventListener('click', event => {
             event.preventDefault();
-            openBookCitation(sourceBook, pdfPage ?? printedPage);
+            openBookCitation(sourceBook, citation);
           });
         } else {
           label.removeAttribute('href'); label.setAttribute('aria-disabled', 'true');
@@ -165,25 +170,131 @@
     });
     const currentDot = dots.children[activeStep]; currentDot?.scrollIntoView({ block: 'nearest' });
   }
-  async function openBookCitation(book, page) {
-    const tab = window.open('about:blank', '_blank');
-    if (!tab) { notify('Allow pop-ups to open the book citation'); return; }
-    try {
+  function loadPdfLibrary() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (pdfLibraryPromise) return pdfLibraryPromise;
+    pdfLibraryPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = PDFJS_SCRIPT; script.async = true;
+      script.onload = () => window.pdfjsLib ? resolve(window.pdfjsLib) : reject(new Error('PDF viewer did not load'));
+      script.onerror = () => reject(new Error('Could not load the PDF viewer. Connect to the internet once and try again.'));
+      document.head.append(script);
+    }).catch(error => { pdfLibraryPromise = null; throw error; });
+    return pdfLibraryPromise;
+  }
+  function pdfCacheKey(book) {
+    return new Request(new URL(`./__book-cache/${encodeURIComponent(book.fileId)}`, location.href));
+  }
+  async function loadBookPdf(book) {
+    if (pdfDocumentCache.has(book.fileId)) return pdfDocumentCache.get(book.fileId);
+    const pdfjs = await loadPdfLibrary();
+    pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    const cache = await caches.open(BOOK_CACHE);
+    const key = pdfCacheKey(book);
+    let response = await cache.match(key);
+    if (!response) {
       const token = await getDriveAccessToken();
-      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(book.fileId)}?alt=media`, {
+      response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(book.fileId)}?alt=media`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!response.ok) throw new Error(`Could not open book (${response.status})`);
-      const pdf = await response.blob();
-      const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }));
-      const pageNumber = Number(page);
-      tab.location.replace(`${url}${Number.isFinite(pageNumber) && pageNumber > 0 ? `#page=${Math.floor(pageNumber)}` : ''}`);
-      notify(`Opened ${book.title}${Number.isFinite(pageNumber) && pageNumber > 0 ? ` · p. ${Math.floor(pageNumber)}` : ''}`);
+      if (!response.ok) throw new Error(`Could not download book (${response.status})`);
+      await cache.put(key, response.clone());
+    }
+    const data = new Uint8Array(await response.arrayBuffer());
+    const pdf = await pdfjs.getDocument({ data }).promise;
+    pdfDocumentCache.set(book.fileId, pdf);
+    return pdf;
+  }
+  function normalizeCitationText(text) {
+    return String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+  }
+  async function getPageText(pdf, fileId, pageNumber) {
+    const key = `${fileId}:${pageNumber}`;
+    if (pdfTextCache.has(key)) return pdfTextCache.get(key);
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    let text = '', charItems = [];
+    content.items.forEach((item, index) => {
+      if (index) { text += ' '; charItems.push(-1); }
+      const normalized = normalizeCitationText(item.str);
+      for (const char of normalized) { text += char; charItems.push(index); }
+    });
+    const result = { page, items: content.items, text, charItems };
+    pdfTextCache.set(key, result);
+    return result;
+  }
+  async function findCitationInBook(pdf, book, citation) {
+    const rawQuery = citation.quote || citation.excerpt || citation.text || citation.section || '';
+    const query = normalizeCitationText(rawQuery);
+    if (!query) return { pageNumber: Number(citation.pdfPage ?? citation.page ?? citation.printedPage) || 1, itemIndexes: [] };
+    const terms = [...new Set(query.split(' ').filter(word => word.length > 2))];
+    let best = null;
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+      const entry = await getPageText(pdf, book.fileId, pageNumber);
+      const exactAt = entry.text.indexOf(query);
+      if (exactAt >= 0) {
+        const indexes = [...new Set(entry.charItems.slice(exactAt, exactAt + query.length).filter(index => index >= 0))];
+        return { pageNumber, itemIndexes: indexes };
+      }
+      let score = 0; const indexes = new Set();
+      for (const term of terms) {
+        if (!entry.text.includes(term)) continue;
+        score++;
+        entry.items.forEach((item, index) => { if (normalizeCitationText(item.str).includes(term)) indexes.add(index); });
+      }
+      if (score && (!best || score > best.score)) best = { pageNumber, itemIndexes: [...indexes], score };
+      if (best && score === terms.length) return { pageNumber, itemIndexes: [...indexes] };
+    }
+    return best || { pageNumber: Number(citation.pdfPage ?? citation.page ?? citation.printedPage) || 1, itemIndexes: [] };
+  }
+  async function openBookCitation(book, citation) {
+    const dialog = $('pdfViewerDialog');
+    if (!dialog.open) dialog.showModal();
+    $('pdfViewerStatus').textContent = 'Opening book…';
+    $('pdfPageCanvas').replaceChildren();
+    try {
+      const pdf = await loadBookPdf(book);
+      $('pdfViewerTitle').textContent = book.title;
+      $('pdfViewerStatus').textContent = 'Searching book text…';
+      const match = await findCitationInBook(pdf, book, citation);
+      currentPdf = pdf; currentPdfPage = match.pageNumber; currentPdfMatchPage = match.pageNumber; currentPdfMatch = match.itemIndexes;
+      await renderPdfPage(currentPdfPage);
+      $('pdfViewerStatus').textContent = match.itemIndexes.length ? 'Citation match highlighted' : 'Showing closest page; quote not found in searchable PDF text';
     } catch (error) {
-      tab.close();
-      notify(error.message || 'Could not open book citation');
+      $('pdfViewerStatus').textContent = error.message || 'Could not open this book';
     }
   }
+  async function renderPdfPage(pageNumber) {
+    if (!currentPdf) return;
+    currentPdfPage = Math.max(1, Math.min(currentPdf.numPages, pageNumber));
+    const page = await currentPdf.getPage(currentPdfPage);
+    const wrap = $('pdfPageCanvas'); wrap.replaceChildren();
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.min((wrap.clientWidth || innerWidth) / base.width, 1.6);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    const outputScale = Math.min(devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(viewport.width * outputScale); canvas.height = Math.floor(viewport.height * outputScale);
+    canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
+    wrap.append(canvas);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport, transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null }).promise;
+    $('pdfPageLabel').textContent = `${currentPdfPage} / ${currentPdf.numPages}`;
+    const content = await page.getTextContent();
+    const marks = document.createDocumentFragment();
+    for (const index of (currentPdfPage === currentPdfMatchPage ? currentPdfMatch : [])) {
+      const item = content.items[index]; if (!item || !item.str) continue;
+      const point = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
+      const mark = document.createElement('span'); mark.className = 'pdf-text-highlight';
+      mark.style.left = `${point[0]}px`; mark.style.top = `${point[1] - item.height * scale}px`;
+      mark.style.width = `${Math.max(item.width * scale, 8)}px`; mark.style.height = `${Math.max(item.height * scale, 8)}px`;
+      marks.append(mark);
+    }
+    wrap.append(marks);
+  }
+  $('pdfCloseButton').addEventListener('click', () => { $('pdfViewerDialog').close(); currentPdf = null; });
+  $('pdfPrevButton').addEventListener('click', () => renderPdfPage(currentPdfPage - 1));
+  $('pdfNextButton').addEventListener('click', () => renderPdfPage(currentPdfPage + 1));
   function goTo(index) {
     const lesson = lessons.find(x => x.id === activeId); if (!lesson || index < 0 || index >= lesson.steps.length || index === activeStep) return;
     const direction = index > activeStep ? 1 : -1;
