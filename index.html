@@ -66,6 +66,18 @@
         <button class="paste-import-button" id="importPasteButton" type="button">Import lesson</button>
       </div>
     </dialog>
+    <dialog class="pdf-viewer-dialog" id="pdfViewerDialog" aria-labelledby="pdfViewerTitle">
+      <header class="pdf-viewer-header">
+        <button id="pdfCloseButton" class="pdf-close-button" type="button" aria-label="Close book">←</button>
+        <div class="pdf-viewer-heading"><h2 id="pdfViewerTitle">Book</h2><span id="pdfViewerStatus">Opening book…</span></div>
+        <div class="pdf-page-controls">
+          <button id="pdfPrevButton" type="button" aria-label="Previous page">↑</button>
+          <span id="pdfPageLabel"></span>
+          <button id="pdfNextButton" type="button" aria-label="Next page">↓</button>
+        </div>
+      </header>
+      <div class="pdf-viewer-scroll"><div id="pdfPageCanvas" class="pdf-page-canvas"></div></div>
+    </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </main>
   <script src="app.js"></script>
